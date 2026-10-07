@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iPC Setup</title>
+    <link rel="stylesheet" href="style.css?v=20261006_6">
+</head>
+<body>
+    <div class="background-anim"></div>
+
+    <div class="app">
+        <header class="app-header">
+            <div class="logo-icon" aria-hidden="true"></div>
+            <div>
+                <h1>iPC Setup</h1>
+                <p>Ignition Edge &amp; network setup for this touchscreen iPC</p>
+            </div>
+        </header>
+
+        <nav id="stepper" class="stepper" aria-label="Progress"></nav>
+
+        <main id="screens">
+            <!-- 1. Task -->
+            <section class="screen active" id="screen-task">
+                <h2>What would you like to do?</h2>
+                <div class="cards cols-3">
+                    <label class="card">
+                        <input type="radio" name="work_mode" value="install" checked>
+                        <div class="card-body">
+                            <div class="card-title">Install</div>
+                            <div class="card-desc">Ignition and its modules only</div>
+                        </div>
+                    </label>
+                    <label class="card">
+                        <input type="radio" name="work_mode" value="network">
+                        <div class="card-body">
+                            <div class="card-title">Network</div>
+                            <div class="card-desc">Network settings only</div>
+                        </div>
+                    </label>
+                    <label class="card">
+                        <input type="radio" name="work_mode" value="full">
+                        <div class="card-body">
+                            <div class="card-title">Both</div>
+                            <div class="card-desc">Install and set up the network</div>
+                        </div>
+                    </label>
+                </div>
+            </section>
+
+            <!-- 2. This iPC -->
+            <section class="screen" id="screen-unit">
+                <h2>What is this iPC?</h2>
+                <div class="group">
+                    <div class="group-label">System type</div>
+                    <div class="cards cols-2">
+                        <label class="card">
+                            <input type="radio" name="system_type" value="HAC" checked>
+                            <div class="card-body">
+                                <div class="card-title">HAC</div>
+                                <div class="card-desc">Hot Aisle Containment</div>
+                            </div>
+                        </label>
+                        <label class="card">
+                            <input type="radio" name="system_type" value="SAP">
+                            <div class="card-body">
+                                <div class="card-title">SAP</div>
+                                <div class="card-desc">Supervisory Action Panel</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+                <div class="group">
+                    <div class="group-label">Node</div>
+                    <div class="cards cols-2">
+                        <label class="card">
+                            <input type="radio" name="node_type" value="Primary" checked>
+                            <div class="card-body">
+                                <div class="card-title">Primary</div>
+                                <div class="card-desc">Main node</div>
+                            </div>
+                        </label>
+                        <label class="card">
+                            <input type="radio" name="node_type" value="Backup">
+                            <div class="card-body">
+                                <div class="card-title">Backup</div>
+                                <div class="card-desc">Redundant fallback node</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 3. Network (HAC only) -->
+            <section class="screen" id="screen-network">
+                <h2>HAC network settings</h2>
+                <div class="group">
+                    <div class="group-label">Which HAC is this?</div>
+                    <div class="cards cols-4 compact">
+                        <label class="card"><input type="radio" name="hac_selection" value="HAC-01"><div class="card-body"><div class="card-title">HAC-01</div></div></label>
+                        <label class="card"><input type="radio" name="hac_selection" value="HAC-02"><div class="card-body"><div class="card-title">HAC-02</div></div></label>
+                        <label class="card"><input type="radio" name="hac_selection" value="HAC-03"><div class="card-body"><div class="card-title">HAC-03</div></div></label>
+                        <label class="card"><input type="radio" name="hac_selection" value="HAC-04"><div class="card-body"><div class="card-title">HAC-04</div></div></label>
+                        <label class="card"><input type="radio" name="hac_selection" value="HAC-05"><div class="card-body"><div class="card-title">HAC-05</div></div></label>
+                        <label class="card"><input type="radio" name="hac_selection" value="HAC-06"><div class="card-body"><div class="card-title">HAC-06</div></div></label>
+                        <label class="card"><input type="radio" name="hac_selection" value="HAC-07"><div class="card-body"><div class="card-title">HAC-07</div></div></label>
+                        <label class="card"><input type="radio" name="hac_selection" value="HAC-08"><div class="card-body"><div class="card-title">HAC-08</div></div></label>
+                    </div>
+                </div>
+                <div class="fields">
+                    <div class="group">
+                        <label class="group-label" for="enp4s0_ip">Facility network address</label>
+                        <input class="field" type="text" id="enp4s0_ip" readonly inputmode="none" autocomplete="off" placeholder="Tap to enter, e.g. 192.168.10.10">
+                    </div>
+                    <div class="group">
+                        <label class="group-label" for="enp4s0_gateway">Gateway <span class="muted">(optional)</span></label>
+                        <input class="field" type="text" id="enp4s0_gateway" readonly inputmode="none" autocomplete="off" placeholder="Tap to enter (default: ends in .1)">
+                    </div>
+                </div>
+            </section>
+
+            <!-- 4. Confirm -->
+            <section class="screen" id="screen-confirm">
+                <h2>Ready to start?</h2>
+                <div class="summary">
+                    <ul class="summary-list" id="summary-list"></ul>
+                    <div class="note-box" id="summary-note"></div>
+                </div>
+            </section>
+
+            <!-- 5. Install (laid out to fit one screen: nothing here should need scrolling) -->
+            <section class="screen" id="screen-install">
+                <div class="install-head">
+                    <h2 id="install-title">Setting up this iPC...</h2>
+                    <span class="timer" id="elapsed">0:00</span>
+                </div>
+                <div class="progress">
+                    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+                    <span class="progress-pct" id="progress-pct">0%</span>
+                </div>
+
+                <div class="install-body">
+                    <ol class="step-list" id="step-list"></ol>
+
+                    <div class="install-side">
+                        <div class="now-box" id="now-box">
+                            <div class="now-label">Now</div>
+                            <div class="now-text" id="now-text">Starting...</div>
+                            <p class="muted" id="install-note">Please keep the iPC powered on. This can take several minutes.</p>
+                        </div>
+
+                        <div class="panel error hidden" id="error-panel" role="alert">
+                            <h3>Something went wrong</h3>
+                            <p id="error-msg"></p>
+                            <p class="muted" id="error-hint"></p>
+                        </div>
+
+                        <div class="panel success hidden" id="done-panel">
+                            <h3 id="done-title">All done</h3>
+                            <ul class="health-list" id="health-list"></ul>
+                        </div>
+
+                        <button type="button" class="link" id="btn-details">Show technical details</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Shown after Finish -->
+            <section class="screen" id="screen-closed">
+                <h2>Installer closed</h2>
+                <p class="muted big">You can close this window. If the iPC was set up, restart it or open Perspective Workstation from the desktop.</p>
+            </section>
+        </main>
+
+        <footer class="actions" id="actions">
+            <button type="button" class="btn secondary" id="btn-back">Back</button>
+            <div class="spacer"></div>
+            <button type="button" class="btn primary" id="btn-next">Next</button>
+            <button type="button" class="btn primary pulse hidden" id="btn-install">Start</button>
+            <button type="button" class="btn primary hidden" id="btn-retry">Try again</button>
+            <button type="button" class="btn secondary hidden" id="btn-hmi">Open Perspective Workstation</button>
+            <button type="button" class="btn danger hidden" id="btn-restart">Restart iPC</button>
+            <button type="button" class="btn success hidden" id="btn-finish">Finish</button>
+        </footer>
+    </div>
+
+    <!-- Technical details (opens over the page so the install screen never needs to scroll) -->
+    <div class="overlay hidden" id="log-overlay">
+        <div class="log-sheet" role="dialog" aria-modal="true" aria-label="Technical details">
+            <div class="log-head">
+                <strong>Technical details</strong>
+                <button type="button" class="btn secondary" id="btn-log-close">Close</button>
+            </div>
+            <div class="terminal" id="terminal-output"></div>
+        </div>
+    </div>
+
+    <!-- Number pad for addresses -->
+    <div class="overlay hidden" id="keypad-overlay">
+        <div class="keypad" id="keypad" role="dialog" aria-modal="true" aria-labelledby="keypad-title">
+            <div class="keypad-top">
+                <div class="keypad-title" id="keypad-title">Address</div>
+                <div class="keypad-display" id="keypad-display"></div>
+                <div class="keypad-msg" id="keypad-msg"></div>
+            </div>
+            <div class="keypad-grid">
+                <button type="button" class="key" data-key="1">1</button>
+                <button type="button" class="key" data-key="2">2</button>
+                <button type="button" class="key" data-key="3">3</button>
+                <button type="button" class="key action" data-key="clear">Clear</button>
+                <button type="button" class="key" data-key="4">4</button>
+                <button type="button" class="key" data-key="5">5</button>
+                <button type="button" class="key" data-key="6">6</button>
+                <button type="button" class="key action" data-key="back" aria-label="Backspace">&#9003;</button>
+                <button type="button" class="key" data-key="7">7</button>
+                <button type="button" class="key" data-key="8">8</button>
+                <button type="button" class="key" data-key="9">9</button>
+                <button type="button" class="key done" data-key="done" id="keypad-done">Done</button>
+                <button type="button" class="key" data-key=".">.</button>
+                <button type="button" class="key" data-key="0">0</button>
+                <button type="button" class="key action wide" data-key="cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation dialog -->
+    <div class="overlay hidden" id="modal-overlay">
+        <div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="modal-title">
+            <h3 id="modal-title"></h3>
+            <p id="modal-text"></p>
+            <div class="modal-actions">
+                <button type="button" class="btn secondary" id="modal-no">Cancel</button>
+                <button type="button" class="btn danger" id="modal-yes">Yes</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js?v=20261006_6"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+    "installer": {
+        "file": "software/ignition-8.3.8-linux-64-installer.run",
+        "sha256": "7c307c8142da4406461e5a87076d5fb7f046c2d0ba9126d68349a52c60c7806b"
+    },
+    "module": {
+        "file": "modules/MQTT-Transmission-signed.modl",
+        "sha256": "0b5b472a39f428b86442ea85faafa5697dac50aef9931d9ef71edda8e4f81ebb"
+    },
+    "backup": {
+        "file": "backups/empty-backup-edge20261005-1333.gwbk",
+        "sha256": "1a93ef39bd6258a3c2ec4fbfac6ada74a0e106b03dcf4862fb13a03708f5b64d"
+    }
+}

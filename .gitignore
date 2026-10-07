@@ -1,0 +1,8 @@
+# -----------------------------------------------------------------------------
+# System & Editor Specific Files
+# -----------------------------------------------------------------------------
+linux
+__pycache__/
+.git/
+# Ignition installer (2 GB) is too large to track; media/manifest.json records its checksum
+media/software/
