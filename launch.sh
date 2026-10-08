@@ -10,7 +10,6 @@ LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/ipc-installer"
 LOG="$LOG_DIR/server.log"
 mkdir -p "$LOG_DIR"
 
-echo "[$(date '+%F %T')] launch.sh started (pid $$)" >> "$LOG"
 echo "Ignition Edge iPC Installer -> $URL"
 
 problem() {
@@ -32,34 +31,6 @@ except Exception:
 PY
 }
 
-# Puts an "iPC Setup" icon in the application menu (and on the Desktop when there is one). Entries made here
-# are normal launchers, so a double-click works without any "Allow Launching" step.
-register_launcher() {
-    [ -z "${IPC_NO_REGISTER:-}" ] || return 0
-    local apps="${XDG_DATA_HOME:-$HOME/.local/share}/applications" here desk
-    here=$(printf '%s' "$PWD" | sed 's/%/%%/g')
-    mkdir -p "$apps" 2>/dev/null || return 0
-    cat > "$apps/ipc-setup.desktop" <<DESKTOP || return 0
-[Desktop Entry]
-Type=Application
-Version=1.0
-Name=iPC Setup
-Comment=Install Ignition Edge and set up this iPC
-Exec=bash "$here/launch.sh"
-Icon=$PWD/web/icon.svg
-Terminal=false
-Categories=Utility;
-StartupNotify=true
-DESKTOP
-    chmod +x "$apps/ipc-setup.desktop" 2>/dev/null || true
-    desk="${IPC_DESKTOP_DIR:-$(xdg-user-dir DESKTOP 2>/dev/null || true)}"
-    if [ -n "$desk" ] && [ -d "$desk" ]; then
-        cp "$apps/ipc-setup.desktop" "$desk/iPC Setup.desktop" 2>/dev/null &&
-            chmod +x "$desk/iPC Setup.desktop" &&
-            gio set "$desk/iPC Setup.desktop" metadata::trusted true >/dev/null 2>&1 || true
-    fi
-}
-
 open_browser() {
     [ -z "${IPC_NO_BROWSER:-}" ] || return 0
     (xdg-open "$URL" >/dev/null 2>&1 &) || true
@@ -71,8 +42,6 @@ if [ "$(id -u)" -eq 0 ]; then
 fi
 command -v python3 >/dev/null 2>&1 || { problem "Python 3 is not installed, so iPC Setup cannot start."; exit 1; }
 command -v pkexec >/dev/null 2>&1 || { problem "The 'pkexec' tool (policykit) is missing, so iPC Setup cannot ask for the administrator password."; exit 1; }
-
-register_launcher
 
 # Already open? Just bring up the page again.
 if server_up; then
