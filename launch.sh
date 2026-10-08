@@ -1,6 +1,6 @@
 #!/bin/bash
 # Starts the iPC installer and opens it in the browser.
-# Run it with:  bash launch.sh   (also what install.sh does). The administrator password is requested
+# Run it with:  bash launch.sh  . The administrator password is requested
 # later, by a pop-up window, when the installation starts.
 cd "$(dirname "$(readlink -f "$0")")" || exit 1
 

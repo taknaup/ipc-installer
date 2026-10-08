@@ -17,7 +17,7 @@ BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$BASE_DIR"
 
 if [ "$EUID" -ne 0 ]; then
-    echo "setup.sh must be run as root. Please launch via install.sh." >&2
+    echo "setup.sh must be run as root. Please start the installer with: bash launch.sh" >&2
     exit 1
 fi
 
