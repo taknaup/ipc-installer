@@ -1,7 +1,7 @@
 #!/bin/bash
 # Starts the iPC installer and opens it in the browser.
-# Used by "iPC Setup.desktop" (double-click) and install.sh. Needs no terminal: the administrator
-# password is requested later, by a pop-up window, when the installation starts.
+# Run it with:  bash launch.sh   (also what install.sh does). The administrator password is requested
+# later, by a pop-up window, when the installation starts.
 cd "$(dirname "$(readlink -f "$0")")" || exit 1
 
 PORT="${IPC_PORT:-3636}"
@@ -66,12 +66,6 @@ $(tail -n 5 "$LOG" 2>/dev/null)"
     sleep 0.5
 done
 server_up || { problem "iPC Setup did not start in time. Details are in $LOG"; exit 1; }
-
-# Make the launcher icon trusted and give it its icon (best effort, only works from a desktop session).
-if [ -f "iPC Setup.desktop" ] && command -v gio >/dev/null 2>&1; then
-    gio set "iPC Setup.desktop" metadata::trusted true >/dev/null 2>&1 || true
-    gio set "iPC Setup.desktop" metadata::custom-icon "file://$PWD/web/icon.svg" >/dev/null 2>&1 || true
-fi
 
 open_browser
 wait "$SERVER_PID"
