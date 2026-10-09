@@ -33,7 +33,7 @@ RUN_ID_RE = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
 LOCATION_RE = re.compile(r'^[A-Za-z0-9_.-]{0,64}$')
 HAC_RE = re.compile(r'^HAC-0[1-8]$')
 
-PW_LAUNCHER = '/usr/local/share/applications/perspectiveworkstation.sh'
+PW_LAUNCHER = '/usr/local/share/applications/perspective-workstation/perspectiveworkstation.sh'
 CONFIG_FILE = os.path.join(BASE_DIR, 'config', 'installer.conf')
 
 _lock = threading.Lock()

@@ -52,10 +52,11 @@ MIN_FREE_KB="${MIN_FREE_KB:-$((5 * 1024 * 1024))}"
 
 # (INSTALL_DIR, SERVICE_NAME, MIN_FREE_KB and the *_DIR paths can be overridden from the environment for testing.)
 
-# Perspective Workstation is unpacked straight into the applications folder (as Ubuntu expects). That folder
-# is shared with every other launcher, so only the four items the archive contains are ever replaced.
-PW_DIR="${PW_DIR:-/usr/local/share/applications}"
-PW_OLD_DIR="${PW_OLD_DIR:-/opt/perspective-workstation}"   # where an earlier version of this installer put it
+# Perspective Workstation lives in its own folder inside the applications folder, which is shared with every
+# other launcher, so nothing outside that folder is ever replaced.
+PW_DIR="${PW_DIR:-/usr/local/share/applications/perspective-workstation}"
+PW_FLAT_DIR="${PW_FLAT_DIR:-/usr/local/share/applications}"   # an earlier version unpacked it loose in here
+PW_OLD_DIR="${PW_OLD_DIR:-/opt/perspective-workstation}"       # ...and an even earlier one used /opt
 PW_ITEMS=(app runtime install.sh perspectiveworkstation.sh)
 PW_LEGACY_DIR="${PW_LEGACY_DIR:-/usr/share/applications}"
 
@@ -604,36 +605,40 @@ trust_launcher() {
     fi
 }
 
-# Installs Perspective Workstation for all users into $PW_DIR (/usr/local/share/applications). The launcher
-# bakes its own location into the desktop entries, so it must stay put. Then adds a desktop shortcut and
-# optional autostart for the person who ran the installer.
+# Installs Perspective Workstation for all users into $PW_DIR (/usr/local/share/applications/perspective-workstation).
+# The launcher bakes its own location into the desktop entries, so it must stay put. Then adds a desktop
+# shortcut and optional autostart for the person who ran the installer.
 step_perspective_workstation() {
     local archive="$INSTALL_DIR/lib/core/launch/perspectiveworkstation.tar.gz"
-    local legacy="$PW_LEGACY_DIR" f user home desktop_dir
+    local f dir user home desktop_dir
     [ -f "$archive" ] || fail "Perspective Workstation archive not found at $archive."
-    [ -n "$PW_DIR" ] && [ "$PW_DIR" != "/" ] || fail "Invalid Perspective Workstation folder."
+    # PW_DIR is deleted and recreated below, so it must be a folder of its own.
+    case "$PW_DIR" in
+        */perspective-workstation) ;;
+        *) fail "Invalid Perspective Workstation folder: $PW_DIR" ;;
+    esac
 
-    # Older versions of this installer unpacked it into /usr/share/applications, or into /opt.
-    if [ "$legacy" != "$PW_DIR" ] && [ -f "$legacy/perspectiveworkstation.sh" ]; then
-        log_msg "[Install] Removing files left by an older installer in $legacy..."
-        for f in "${PW_ITEMS[@]}"; do rm -rf "${legacy:?}/$f"; done
-    fi
+    # Earlier versions of this installer unpacked the four items loose into a shared applications folder.
+    for dir in "$PW_LEGACY_DIR" "$PW_FLAT_DIR"; do
+        if [ -n "$dir" ] && [ -f "$dir/perspectiveworkstation.sh" ]; then
+            log_msg "[Install] Removing files left by an older installer in $dir..."
+            for f in "${PW_ITEMS[@]}"; do rm -rf "${dir:?}/$f"; done
+        fi
+    done
     if [ -n "$PW_OLD_DIR" ] && [ "$PW_OLD_DIR" != "$PW_DIR" ] && [ -f "$PW_OLD_DIR/perspectiveworkstation.sh" ]; then
         log_msg "[Install] Removing the earlier copy in $PW_OLD_DIR..."
         rm -rf "${PW_OLD_DIR:?}"
     fi
 
     log_msg "[Install] Extracting Perspective Workstation to $PW_DIR..."
+    rm -rf "${PW_DIR:?}"
     mkdir -p "$PW_DIR"
-    for f in "${PW_ITEMS[@]}"; do rm -rf "${PW_DIR:?}/$f"; done
     run tar -xzf "$archive" --no-same-owner --strip-components=1 -C "$PW_DIR" || fail "Could not extract Perspective Workstation."
-    for f in "${PW_ITEMS[@]}"; do
+    chown -R root:root "$PW_DIR"
+    chmod -R u=rwX,go=rX "$PW_DIR"
+    for f in perspectiveworkstation.sh install.sh app/workstation-linux.jar runtime/bin/java; do
         [ -e "$PW_DIR/$f" ] || fail "Perspective Workstation is incomplete (missing $f)."
-        chown -R root:root "$PW_DIR/$f"
-        chmod -R u=rwX,go=rX "$PW_DIR/$f"
     done
-    [ -e "$PW_DIR/app/workstation-linux.jar" ] && [ -e "$PW_DIR/runtime/bin/java" ] ||
-        fail "Perspective Workstation is incomplete (missing app files)."
     chmod +x "$PW_DIR/perspectiveworkstation.sh" "$PW_DIR/install.sh" "$PW_DIR/runtime/bin/java"
 
     log_msg "[Install] Registering Perspective Workstation for all users..."
