@@ -582,6 +582,24 @@ print(m)') || fail "The gateway did not return a valid module ID for the MQTT mo
     log_msg "[MQTT] MQTT Transmission module installed."
 }
 
+# trust_launcher <user> <home> <file> -- lets GNOME launch the icon without the "untrusted launcher" prompt.
+# The trusted flag lives in the user's own gvfs metadata, reached over their D-Bus session. pkexec starts us
+# with HOME=/root and no session bus, so without these variables gio fails ("attribute not supported").
+trust_launcher() {
+    local user="$1" home="$2" file="$3" rt out
+    rt="/run/user/$(id -u "$user")"
+    if [ ! -S "$rt/bus" ]; then
+        log_msg "[Install] Warning: $user has no desktop session open, so the shortcut could not be trusted. Right-click it and choose Allow Launching."
+        return 0
+    fi
+    if out=$(runuser -u "$user" -- env HOME="$home" XDG_RUNTIME_DIR="$rt" DBUS_SESSION_BUS_ADDRESS="unix:path=$rt/bus" \
+            gio set "$file" metadata::trusted true 2>&1); then
+        log_msg "[Install] Desktop shortcut marked as trusted."
+    else
+        log_msg "[Install] Warning: could not trust the desktop shortcut ($out). Right-click it and choose Allow Launching."
+    fi
+}
+
 # Installs Perspective Workstation system-wide under /opt (the launcher bakes its own location into
 # the desktop entries, so it must stay put), then adds a desktop shortcut and optional autostart for
 # the person who ran the installer.
@@ -633,8 +651,7 @@ Categories=Application;Network;
 DESKTOP
     chmod +x "$desktop_dir/Perspective Workstation.desktop"
     chown "$user:$(id -gn "$user")" "$desktop_dir" "$desktop_dir/Perspective Workstation.desktop"
-    # Lets GNOME launch the icon without the "untrusted launcher" prompt; needs a session bus, so best effort.
-    runuser -u "$user" -- gio set "$desktop_dir/Perspective Workstation.desktop" metadata::trusted true >/dev/null 2>&1 || true
+    trust_launcher "$user" "$home" "$desktop_dir/Perspective Workstation.desktop"
     log_msg "[Install] Desktop shortcut created for $user."
 
     if [ -n "$WORKSTATION_URL" ]; then
