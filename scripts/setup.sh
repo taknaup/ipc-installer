@@ -74,6 +74,8 @@ GATEWAY_ADMIN_PASSWORD="${GATEWAY_ADMIN_PASSWORD:-ignition}"
 GATEWAY_USER="${GATEWAY_USER:-root}"
 FORCE_REINSTALL="${FORCE_REINSTALL:-false}"
 WORKSTATION_URL="${WORKSTATION_URL:-}"
+SAP_MAX_FILE_SIZE="${SAP_MAX_FILE_SIZE:-134217728}"
+[[ "$SAP_MAX_FILE_SIZE" =~ ^[0-9]+$ ]] || { echo "Invalid SAP_MAX_FILE_SIZE." >&2; exit 1; }
 [[ "$GATEWAY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] || { echo "Invalid GATEWAY_USER: $GATEWAY_USER" >&2; exit 1; }
 [[ -z "$WORKSTATION_URL" || "$WORKSTATION_URL" =~ ^[A-Za-z0-9:/._?\&=%#@-]+$ ]] || { echo "Invalid WORKSTATION_URL." >&2; exit 1; }
 
@@ -688,6 +690,34 @@ AUTOSTART
     log_msg "[Install] Perspective Workstation installed."
 }
 
+# SAP systems accept larger uploads than Ignition's 20 MB default: set max-file-size in the gateway web
+# server's web.xml (read when the gateway starts, so finalize's restart applies it). Safe to repeat.
+step_webserver_limits() {
+    local webxml="$INSTALL_DIR/webserver/webapps/main/WEB-INF/web.xml" before
+    if [ "$SYSTEM_TYPE" != "SAP" ]; then
+        log_msg "[Web] Not a SAP system, leaving the upload limit at its default."
+        return 0
+    fi
+    [ -f "$webxml" ] || fail "Could not find the gateway web server settings ($webxml)."
+    [ -f "$webxml.orig" ] || cp -p "$webxml" "$webxml.orig"
+    before=$(python3 -I - "$webxml" "$SAP_MAX_FILE_SIZE" <<'PY'
+import re, sys
+path, new = sys.argv[1], sys.argv[2]
+text = open(path, encoding="utf-8").read()
+pattern = re.compile(r"(<max-file-size>\s*)(\d+)(\s*</max-file-size>)")
+found = pattern.findall(text)
+if len(found) != 1:
+    sys.exit(f"expected exactly one max-file-size, found {len(found)}")
+open(path, "w", encoding="utf-8").write(pattern.sub(lambda m: m.group(1) + new + m.group(3), text))
+print(found[0][1])
+PY
+    ) || fail "Could not update the upload limit in web.xml." "The original was kept as $webxml.orig"
+    grep -q "<max-file-size>$SAP_MAX_FILE_SIZE</max-file-size>" "$webxml" ||
+        fail "The upload limit in web.xml was not updated."
+    log_msg "[Web] Upload limit (max-file-size) changed from $before to $SAP_MAX_FILE_SIZE bytes ($((SAP_MAX_FILE_SIZE / 1048576)) MB)."
+    health ok "Upload limit set to $((SAP_MAX_FILE_SIZE / 1048576)) MB"
+}
+
 step_finalize() {
     log_msg "[Service] Restarting Ignition Gateway service..."
     systemctl restart "${SERVICE_NAME}.service" || fail "Could not restart the Ignition service."
@@ -761,6 +791,7 @@ else
         "restore_backup|60|Loading the gateway configuration|step_restore_backup"
     )
     if [ "$SYSTEM_TYPE" = "HAC" ]; then STEPS+=("install_module|70|Installing the MQTT module|step_install_module"); fi
+    if [ "$SYSTEM_TYPE" = "SAP" ]; then STEPS+=("webserver|75|Raising the upload limit|step_webserver_limits"); fi
     STEPS+=(
         "perspective|80|Installing Perspective Workstation|step_perspective_workstation"
         "finalize|90|Final checks|step_finalize"
