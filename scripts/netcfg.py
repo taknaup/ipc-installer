@@ -6,6 +6,7 @@ applying, the expected addresses are verified and everything is rolled back if t
 Exit code 0 = success, 1 = failure (details in --result-file as {"ok", "message", "hint"}).
 """
 import argparse
+import configparser
 import glob
 import ipaddress
 import json
@@ -27,6 +28,8 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NETPLAN_FILE = 'etc/netplan/99-netcfg.yaml'
 CLOUD_CFG = 'etc/cloud/cloud.cfg.d/99-disable-network-config.cfg'
 NM_CONN_DIR = 'etc/NetworkManager/system-connections'
+NM_CONF = 'etc/NetworkManager/conf.d/90-ipc-no-auto-default.conf'
+NETPLAN_DIRS = ('etc/netplan', 'run/netplan')
 VERIFY_TIMEOUT = 30
 
 
@@ -182,45 +185,54 @@ def validate_staged(yaml_text):
             raise NetcfgError('netplan rejected the generated configuration.', ' '.join(reasons) or err[-300:])
 
 
-def conflicting_netplan_files(netplan_dir, ifaces):
-    """Other netplan files that configure the same ports. netplan merges address lists across files, so
-    leftovers (installer defaults, cloud-init, earlier manual files) would add stale addresses."""
+def old_netplan_files(net):
+    """Every netplan file except ours. netplan merges all of them, so installer defaults, cloud-init output and
+    earlier manual files would otherwise keep adding stale addresses and routes."""
     found = []
-    for path in sorted(glob.glob(os.path.join(netplan_dir, '*.yaml'))):
-        if os.path.basename(path) == os.path.basename(NETPLAN_FILE):
+    for rel in NETPLAN_DIRS:
+        for path in sorted(glob.glob(os.path.join(net.p(rel), '*.yaml'))):
+            if path != net.p(NETPLAN_FILE):
+                found.append(path)
+    return found
+
+
+def old_nm_profiles(net):
+    """Stored NetworkManager ethernet profiles that netplan did not create (e.g. 'Wired connection 1')."""
+    found = []
+    base = net.p(NM_CONN_DIR)
+    for path in sorted(glob.glob(os.path.join(base, '*'))):
+        if not os.path.isfile(path):
             continue
+        cp = configparser.RawConfigParser(strict=False, interpolation=None)
+        cp.optionxform = str
         try:
-            with open(path) as f:
-                doc = yaml.safe_load(f) or {}
-            defined = set((doc.get('network') or {}).get('ethernets') or {})
-        except (OSError, yaml.YAMLError) as e:
-            log(f'[Network] Warning: could not read {path}: {e}')
+            cp.read(path, encoding='utf-8')
+        except (configparser.Error, OSError, UnicodeDecodeError):
             continue
-        if defined & set(ifaces):
-            found.append(path)
+        ptype = cp.get('connection', 'type', fallback='')
+        pid = cp.get('connection', 'id', fallback='')
+        if ptype in ('ethernet', '802-3-ethernet') and not pid.startswith('netplan-'):
+            found.append((path, pid or os.path.basename(path)))
     return found
 
 
-def nm_conflicts(net, ifaces):
-    """Non-netplan NetworkManager ethernet profiles (e.g. 'Wired connection 1') bound to our ports."""
+def delete_old_nm_profiles(net, st, backup_copy_dir):
+    """Deletes the old profiles (their files were copied to the backup first)."""
+    for path, name in old_nm_profiles(net):
+        saved = os.path.join(backup_copy_dir, NM_CONN_DIR, os.path.basename(path))
+        os.remove(path)
+        st.nm_deleted.append((path, saved))
+        log(f'[Network] Deleted old connection profile "{name}"')
     if not net.live:
-        return []
-    rc, out, _ = run_cmd(['nmcli', '-t', '-f', 'UUID,NAME,TYPE,DEVICE', 'con', 'show'])
-    if rc != 0:
-        return []
-    found = []
-    for line in out.splitlines():
+        return
+    run_cmd(['nmcli', 'connection', 'reload'])
+    # Anything NetworkManager still lists that is not a netplan profile (e.g. an in-memory "Wired connection").
+    rc, out, _ = run_cmd(['nmcli', '-t', '-f', 'UUID,NAME,TYPE', 'con', 'show'])
+    for line in out.splitlines() if rc == 0 else []:
         parts = line.split(':')
-        if len(parts) < 4 or parts[2] != '802-3-ethernet' or parts[1].startswith('netplan-'):
-            continue
-        uuid, device = parts[0], parts[3]
-        rc, bound, _ = run_cmd(['nmcli', '-g', 'connection.interface-name,connection.autoconnect', 'con', 'show', 'uuid', uuid])
-        fields = bound.splitlines() if rc == 0 else []
-        iface = fields[0] if fields else ''
-        autoconnect = fields[1] if len(fields) > 1 else 'yes'
-        if (iface in ifaces or (not iface and device in ifaces)) and autoconnect == 'yes':
-            found.append((uuid, parts[1]))
-    return found
+        if len(parts) >= 3 and parts[-1] == '802-3-ethernet' and not parts[1].startswith('netplan-'):
+            if run_cmd(['nmcli', 'con', 'delete', 'uuid', parts[0]])[0] == 0:
+                log(f'[Network] Deleted old connection profile "{parts[1]}"')
 
 
 # ---------------------------------------------------------------- apply with rollback
@@ -230,7 +242,8 @@ class State:
         self.new_file = None
         self.cloud_file = None
         self.moved = []        # (original, backup copy)
-        self.nm_disabled = []  # uuids
+        self.nm_deleted = []   # (original path, backup copy)
+        self.nm_conf = None
 
 
 def rollback(net, st):
@@ -239,14 +252,22 @@ def rollback(net, st):
         os.remove(st.new_file)
     if st.cloud_file and os.path.exists(st.cloud_file):
         os.remove(st.cloud_file)
+    if st.nm_conf and os.path.exists(st.nm_conf):
+        os.remove(st.nm_conf)
+    for original, saved in st.nm_deleted:
+        try:
+            shutil.copy2(saved, original)
+            os.chmod(original, 0o600)
+        except OSError as e:
+            log(f'[Network] Warning: could not restore {original}: {e}')
     for original, saved in st.moved:
         try:
             shutil.move(saved, original)
         except OSError as e:
             log(f'[Network] Warning: could not restore {original}: {e}')
     if net.live:
-        for uuid in st.nm_disabled:
-            run_cmd(['nmcli', 'con', 'modify', 'uuid', uuid, 'connection.autoconnect', 'yes'])
+        if st.nm_deleted:
+            run_cmd(['nmcli', 'connection', 'reload'])
         rc, _, err = run_cmd(['netplan', 'apply'], timeout=90)
         if rc != 0:
             log(f'[Network] Warning: netplan apply during rollback failed: {err}')
@@ -322,18 +343,17 @@ def apply(net, args, yaml_text, ethernets):
                 f'Ports found: {", ".join(available) or "none"}. Update the port names in network/config.json and the templates.')
     check_duplicate_addresses(net, ethernets)
 
-    backup_configs(net, args.backup_dir)
+    backup_copy = backup_configs(net, args.backup_dir)
     st = State()
     try:
-        netplan_dir = net.p('etc/netplan')
-        os.makedirs(netplan_dir, exist_ok=True)
+        os.makedirs(net.p('etc/netplan'), exist_ok=True)
         aside = os.path.join(args.backup_dir, 'netplan-replaced')
         os.makedirs(aside, exist_ok=True)
-        for path in conflicting_netplan_files(netplan_dir, ifaces):
+        for path in old_netplan_files(net):
             saved = os.path.join(aside, f'{time.strftime("%Y%m%d-%H%M%S")}-{os.path.basename(path)}')
             shutil.move(path, saved)
             st.moved.append((path, saved))
-            log(f'[Network] Moved aside conflicting {os.path.basename(path)}')
+            log(f'[Network] Removed old netplan file {os.path.basename(path)} (copy kept in the backup)')
 
         st.new_file = net.p(NETPLAN_FILE)
         with open(st.new_file, 'w') as f:
@@ -347,11 +367,16 @@ def apply(net, args, yaml_text, ethernets):
                 f.write('network: {config: disabled}\n')
             st.cloud_file = net.p(CLOUD_CFG)
 
-        for uuid, name in nm_conflicts(net, ifaces):
-            rc, _, _ = run_cmd(['nmcli', 'con', 'modify', 'uuid', uuid, 'connection.autoconnect', 'no'])
-            if rc == 0:
-                st.nm_disabled.append(uuid)
-                log(f'[Network] Disabled automatic connection profile "{name}"')
+        delete_old_nm_profiles(net, st, backup_copy)
+
+        # Stop NetworkManager inventing a new "Wired connection N" profile for a port.
+        if not os.path.exists(net.p(NM_CONF)):
+            os.makedirs(os.path.dirname(net.p(NM_CONF)), exist_ok=True)
+            with open(net.p(NM_CONF), 'w') as f:
+                f.write('[main]\nno-auto-default=*\n')
+            st.nm_conf = net.p(NM_CONF)
+            if net.live:
+                run_cmd(['nmcli', 'general', 'reload', 'conf'])
 
         if net.live:
             log('[Network] Applying network configuration...')

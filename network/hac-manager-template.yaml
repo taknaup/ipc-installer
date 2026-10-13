@@ -11,7 +11,9 @@ network:
       link-local: [ ]            # no IPv4 or IPv6 link-local addresses
       networkmanager:
         passthrough:
-          ipv6.method: "disabled"   # IPv6 fully off on this port
+          ipv6.method: "disabled"          # IPv6 fully off on this port
+          ipv4.ignore-auto-dns: "true"     # DNS "Automatic" switched off
+          ipv4.never-default: "true"       # "Use this connection only for resources on its network"
       addresses:
         - {{eno1_ip}}/24
       routes:
@@ -30,7 +32,9 @@ network:
       link-local: [ ]            # no IPv4 or IPv6 link-local addresses
       networkmanager:
         passthrough:
-          ipv6.method: "disabled"   # IPv6 fully off on this port
+          ipv6.method: "disabled"          # IPv6 fully off on this port
+          ipv4.ignore-auto-dns: "true"     # DNS "Automatic" switched off
+          ipv4.never-default: "true"       # "Use this connection only for resources on its network"
       addresses:
         - {{enp2s0_ip}}/24
       routes:
@@ -45,7 +49,9 @@ network:
       link-local: [ ]            # no IPv4 or IPv6 link-local addresses
       networkmanager:
         passthrough:
-          ipv6.method: "disabled"   # IPv6 fully off on this port
+          ipv6.method: "disabled"          # IPv6 fully off on this port
+          ipv4.ignore-auto-dns: "true"     # DNS "Automatic" switched off
+          ipv4.never-default: "true"       # "Use this connection only for resources on its network"
       addresses:
         - {{enp4s0_ip}}/24
       routes:
