@@ -74,6 +74,12 @@ GATEWAY_ADMIN_PASSWORD="${GATEWAY_ADMIN_PASSWORD:-ignition}"
 GATEWAY_USER="${GATEWAY_USER:-root}"
 FORCE_REINSTALL="${FORCE_REINSTALL:-false}"
 WORKSTATION_URL="${WORKSTATION_URL:-}"
+VALIDATE_NETWORK="${VALIDATE_NETWORK:-false}"
+case "${VALIDATE_NETWORK,,}" in
+    true|yes|1)  VALIDATE_NETWORK=true ;;
+    false|no|0)  VALIDATE_NETWORK=false ;;
+    *) echo "Invalid VALIDATE_NETWORK (use true or false): $VALIDATE_NETWORK" >&2; exit 1 ;;
+esac
 SAP_MAX_FILE_SIZE="${SAP_MAX_FILE_SIZE:-134217728}"
 [[ "$SAP_MAX_FILE_SIZE" =~ ^[0-9]+$ ]] || { echo "Invalid SAP_MAX_FILE_SIZE." >&2; exit 1; }
 [[ "$GATEWAY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] || { echo "Invalid GATEWAY_USER: $GATEWAY_USER" >&2; exit 1; }
@@ -755,6 +761,7 @@ step_network() {
         args+=(--hac "$HAC_SELECTION" --facility-ip "$ENP4S0_IP")
         [ -z "$ENP4S0_GATEWAY" ] || args+=(--facility-gateway "$ENP4S0_GATEWAY")
     fi
+    [ "$VALIDATE_NETWORK" = "true" ] || args+=(--skip-verify)
     rm -f "$result"
     if ! run python3 "$BASE_DIR/scripts/netcfg.py" "${args[@]}"; then
         message=$(result_field "$result" message) || message=""
@@ -765,6 +772,9 @@ step_network() {
     result_field "$result" summary | while IFS= read -r line; do
         [ -z "$line" ] || health ok "$line"
     done
+    if [ "$VALIDATE_NETWORK" != "true" ]; then
+        health warn "Network settings were saved but not checked. Restart the iPC to make sure they are active."
+    fi
 }
 
 result_field() { # result_field <file> <key>

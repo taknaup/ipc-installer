@@ -358,12 +358,16 @@ def apply(net, args, yaml_text, ethernets):
             rc, _, err = run_cmd(['netplan', 'apply'], timeout=90)
             if rc != 0:
                 raise NetcfgError('netplan could not apply the configuration.', err[-300:])
-            verify(net, ethernets)
-            report_link_state(net, ethernets)
+            if args.skip_verify:
+                log('[Network] Skipping the check that the new addresses are up (VALIDATE_NETWORK is off); '
+                    'they may only appear after the iPC restarts.')
+            else:
+                verify(net, ethernets)
+                report_link_state(net, ethernets)
     except Exception:
         rollback(net, st)
         raise
-    log('[Network] Network configuration applied and verified.')
+    log('[Network] Network configuration applied.' if args.skip_verify else '[Network] Network configuration applied and verified.')
 
 
 # ---------------------------------------------------------------- main
@@ -381,6 +385,8 @@ def main():
     ap.add_argument('--root', default='/', help='filesystem root to operate on (testing)')
     ap.add_argument('--dry-run', action='store_true', help='render and validate only; print the result')
     ap.add_argument('--no-apply', action='store_true', help='write files under --root but do not run netplan/nmcli')
+    ap.add_argument('--skip-verify', action='store_true',
+                    help='do not wait for / require the new addresses to be up after netplan apply')
     ap.add_argument('--result-file', default='')
     args = ap.parse_args()
 
@@ -405,6 +411,7 @@ def main():
         roles = {'eno1': 'SAP network' if args.system == 'SAP' else 'Controls network',
                  'enp2s0': 'SAP network', 'enp4s0': 'Facility network'}
         result['summary'] = [f'{roles.get(i, i)} ({i}): {c["addresses"][0]}' for i, c in ethernets.items()]
+        result['verified'] = not args.skip_verify
         result['ok'] = True
     except NetcfgError as e:
         result.update(message=str(e), hint=e.hint)
