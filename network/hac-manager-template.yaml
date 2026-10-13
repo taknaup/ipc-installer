@@ -6,6 +6,12 @@ network:
   ethernets:
     eno1:   # controls network
       dhcp4: false
+      dhcp6: false
+      accept-ra: false
+      link-local: [ ]            # no IPv4 or IPv6 link-local addresses
+      networkmanager:
+        passthrough:
+          ipv6.method: "disabled"   # IPv6 fully off on this port
       addresses:
         - {{eno1_ip}}/24
       routes:
@@ -19,6 +25,12 @@ network:
 
     enp2s0:   # sap network
       dhcp4: false
+      dhcp6: false
+      accept-ra: false
+      link-local: [ ]            # no IPv4 or IPv6 link-local addresses
+      networkmanager:
+        passthrough:
+          ipv6.method: "disabled"   # IPv6 fully off on this port
       addresses:
         - {{enp2s0_ip}}/24
       routes:
@@ -28,6 +40,12 @@ network:
 
     enp4s0:   # facility network
       dhcp4: false
+      dhcp6: false
+      accept-ra: false
+      link-local: [ ]            # no IPv4 or IPv6 link-local addresses
+      networkmanager:
+        passthrough:
+          ipv6.method: "disabled"   # IPv6 fully off on this port
       addresses:
         - {{enp4s0_ip}}/24
       routes:
