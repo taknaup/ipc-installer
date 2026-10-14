@@ -1,4 +1,5 @@
 # Rendered by scripts/netcfg.py -> /etc/netplan/99-netcfg.yaml
+# The eno1 routes line below becomes a default route only when a gateway is entered; otherwise nothing is added.
 network:
   version: 2
   renderer: NetworkManager
@@ -16,3 +17,4 @@ network:
           #ipv4.never-default: "true"       # "Use this connection only for resources on its network"
       addresses:
         - {{eno1_ip}}/24
+      {{eno1_routes}}

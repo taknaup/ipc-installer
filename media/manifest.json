@@ -8,7 +8,7 @@
         "sha256": "0b5b472a39f428b86442ea85faafa5697dac50aef9931d9ef71edda8e4f81ebb"
     },
     "backup": {
-        "file": "backups/empty-backup-edge20261006-1652.gwbk",
-        "sha256": "5f40bfc8214bd046e27bf2deab394b620ba5d34fe976724696a28d0b309183ea"
+        "file": "backups/empty-backup-edge20261014-1546.gwbk",
+        "sha256": "52f752218a7cb0cd190a37e6766aafeafcf0b0d27a7e221e7f142c24910896b1"
     }
 }

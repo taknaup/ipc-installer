@@ -762,8 +762,9 @@ step_network() {
     args=(--system "$SYSTEM_TYPE" --node "$NODE_TYPE" --backup-dir "$BACKUP_DIR/network" --result-file "$result")
     if [ "$SYSTEM_TYPE" = "HAC" ]; then
         args+=(--hac "$HAC_SELECTION" --facility-ip "$ENP4S0_IP")
-        [ -z "$ENP4S0_GATEWAY" ] || args+=(--facility-gateway "$ENP4S0_GATEWAY")
     fi
+    # HAC: blank = facility .1. SAP: blank = no default route.
+    [ -z "$ENP4S0_GATEWAY" ] || args+=(--facility-gateway "$ENP4S0_GATEWAY")
     [ "$VALIDATE_NETWORK" = "true" ] || args+=(--skip-verify)
     rm -f "$result"
     if ! run python3 "$BASE_DIR/scripts/netcfg.py" "${args[@]}"; then

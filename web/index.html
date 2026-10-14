@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>iPC Setup</title>
-    <link rel="stylesheet" href="style.css?v=20261014_2">
+    <link rel="stylesheet" href="style.css?v=20261015_1">
 </head>
 <body>
     <div class="background-anim"></div>
@@ -94,8 +94,8 @@
 
             <!-- 3. Network (HAC only) -->
             <section class="screen" id="screen-network">
-                <h2>HAC network settings</h2>
-                <div class="group">
+                <h2 id="network-title">HAC network settings</h2>
+                <div class="group" id="hac-grid-group">
                     <div class="group-label">Which HAC is this?</div>
                     <div class="cards cols-4 compact">
                         <label class="card"><input type="radio" name="hac_selection" value="HAC-01"><div class="card-body"><div class="card-title">HAC-01</div></div></label>
@@ -109,7 +109,7 @@
                     </div>
                 </div>
                 <div class="fields">
-                    <div class="group">
+                    <div class="group" id="facility-ip-group">
                         <label class="group-label" for="enp4s0_ip">Facility network address</label>
                         <input class="field" type="text" id="enp4s0_ip" readonly inputmode="none" autocomplete="off" placeholder="Tap to enter, e.g. 192.168.10.10">
                     </div>
@@ -237,6 +237,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=20261014_2"></script>
+    <script src="script.js?v=20261015_1"></script>
 </body>
 </html>

@@ -4,6 +4,13 @@ Newest first. Add an entry here with every change that is committed: version, da
 and the commit it came from (`git log --oneline`). Versions: first number for a redesign, second for new or
 changed behaviour, third for fixes.
 
+## 1.6.0 - 2026-10-15
+- **SAP network: optional default gateway.** The gateway field now shows for SAP when the network is
+  configured (the HAC number and facility address stay HAC-only). Blank means no default route is written to
+  the YAML; an entered gateway becomes the default route on `eno1`. A gateway outside `eno1`'s /24 is set
+  on-link; the iPC's own address and network/broadcast addresses are rejected. The confirm screen shows the
+  result ("None (no default route)" or the route that will be added).
+
 ## 1.5.0 - 2026-10-14
 - **Network: gateway entry.** A blank gateway puts a default route via the facility network's `.1` address on
   `enp4s0`. An entered gateway is matched to the port whose /24 it is on (controls `eno1`, SAP `enp2s0`,

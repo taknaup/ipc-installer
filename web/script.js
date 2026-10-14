@@ -40,7 +40,7 @@
 
     function screenOrder() {
         const order = ['task', 'unit'];
-        if (askHac()) order.push('network');
+        if (needsNetwork()) order.push('network');
         order.push('confirm', 'install');
         return order;
     }
@@ -112,10 +112,12 @@
     // Returns an error message, or '' if the current screen is complete.
     function validateScreen(name) {
         if (name === 'network') {
-            if (!radio('hac_selection')) return 'Choose which HAC this is.';
-            const ip = $('enp4s0_ip').value.trim();
             const gw = $('enp4s0_gateway').value.trim();
-            if (!isValidIPv4(ip)) { $('enp4s0_ip').classList.add('invalid'); return 'Enter the facility network address, for example 192.168.10.10.'; }
+            if (radio('system_type') === 'HAC') {
+                if (!radio('hac_selection')) return 'Choose which HAC this is.';
+                const ip = $('enp4s0_ip').value.trim();
+                if (!isValidIPv4(ip)) { $('enp4s0_ip').classList.add('invalid'); return 'Enter the facility network address, for example 192.168.10.10.'; }
+            }
             if (gw && !isValidIPv4(gw)) {
                 $('enp4s0_gateway').classList.add('invalid');
                 return 'Enter the gateway as four numbers, for example 192.168.100.1, or leave it blank.';
@@ -127,18 +129,19 @@
     // Asks the installer's own logic which port the default route will be set on.
     async function showRoutePreview(el) {
         const q = new URLSearchParams({
-            hac: radio('hac_selection'), node: asksNode() ? radio('node_type') : 'Primary',
+            system: radio('system_type'), hac: radio('hac_selection'), node: asksNode() ? radio('node_type') : 'Primary',
             ip: $('enp4s0_ip').value.trim(), gw: $('enp4s0_gateway').value.trim()
         });
         try {
             const res = await fetch(`/api/route-preview?${q}`, { cache: 'no-store' });
             const data = await res.json();
-            el.textContent = data.text.replace(/^Default gateway /, '');
+            el.textContent = data.text.replace(/^Default gateway /, '').replace(/^No default gateway.*/, 'None (no default route)');
             // A gateway the installer would reject: show why and keep Start disabled until it is fixed.
             el.style.color = data.ok ? '' : '#fca5a5';
             $('btn-install').disabled = !data.ok;
         } catch (err) {
-            el.textContent = $('enp4s0_gateway').value.trim() || `${defaultGateway($('enp4s0_ip').value.trim())} (facility default)`;
+            el.textContent = $('enp4s0_gateway').value.trim()
+                || (radio('system_type') === 'HAC' ? `${defaultGateway($('enp4s0_ip').value.trim())} (facility default)` : 'None (no default route)');
         }
     }
 
@@ -148,8 +151,9 @@
         if (asksNode()) rows.push(['Node', radio('node_type')]);
         if (askHac()) {
             const ip = $('enp4s0_ip').value.trim();
-            rows.push(['HAC', radio('hac_selection')], ['Facility address', ip], ['Default gateway', 'Working it out...']);
+            rows.push(['HAC', radio('hac_selection')], ['Facility address', ip]);
         }
+        if (needsNetwork()) rows.push(['Default gateway', 'Working it out...']);
         const list = $('summary-list');
         list.innerHTML = '';
         let routeEl = null;
@@ -190,18 +194,31 @@
         show(order[order.indexOf(current) - 1]);
     });
 
+    // The network screen: HAC asks for its number and facility address as well; SAP only has the gateway.
+    function updateNetworkScreen() {
+        const hac = radio('system_type') === 'HAC';
+        $('network-title').textContent = hac ? 'HAC network settings' : 'SAP network settings';
+        setVisible('hac-grid-group', hac);
+        setVisible('facility-ip-group', hac);
+        $('enp4s0_gateway').placeholder = hac ? 'Tap to enter (blank: facility .1)' : 'Tap to enter (blank: none)';
+        $('gateway-hint').textContent = hac
+            ? "Leave blank to use the facility network's .1 address. A gateway is set on the port it belongs to (controls, SAP or facility); any other address is used on the facility port."
+            : 'Leave blank for no default gateway. If you enter one, it is set as the default route on this iPC\'s network port.';
+    }
+
     function updateNodeVisibility() { setVisible('node-group', asksNode()); }
     document.querySelectorAll('input[name="work_mode"], input[name="system_type"]').forEach(r =>
-        r.addEventListener('change', () => { renderStepper(); updateNodeVisibility(); }));
+        r.addEventListener('change', () => { renderStepper(); updateNodeVisibility(); updateNetworkScreen(); }));
     updateNodeVisibility();
+    updateNetworkScreen();
 
     // ------------------------------------------------------------------ number pad
 
-    const keypad = { target: null, original: '', allowEmpty: false, ghost: '' };
+    const keypad = { target: null, original: '', allowEmpty: false, ghost: '', emptyHint: '' };
     const kpOverlay = $('keypad-overlay');
 
     function kpValidate(value) {
-        if (!value) return keypad.allowEmpty ? { cls: '', text: 'Leave empty to use the default.' } : { cls: '', text: 'Enter four numbers separated by dots.' };
+        if (!value) return keypad.allowEmpty ? { cls: '', text: keypad.emptyHint } : { cls: '', text: 'Enter four numbers separated by dots.' };
         if (isValidIPv4(value)) return { cls: 'ok', text: 'Looks good' };
         const parts = value.split('.');
         if (parts.length > 4) return { cls: 'bad', text: 'Too many parts: an address has four numbers.' };
@@ -284,7 +301,10 @@
     $('enp4s0_gateway').addEventListener('click', () => {
         clearFormErrors();
         const ip = $('enp4s0_ip').value.trim();
-        kpOpen($('enp4s0_gateway'), 'Gateway (optional)', true, isValidIPv4(ip) ? `${defaultGateway(ip)}  (default)` : '192.168.10.1');
+        const hac = radio('system_type') === 'HAC';
+        keypad.emptyHint = hac ? 'Leave empty to use the facility default.' : 'Leave empty for no default gateway.';
+        kpOpen($('enp4s0_gateway'), 'Default gateway (optional)', true,
+            hac ? (isValidIPv4(ip) ? `${defaultGateway(ip)}  (default)` : '192.168.10.1') : 'None');
     });
 
     // ------------------------------------------------------------------ confirm dialog
@@ -504,6 +524,8 @@
         if (askHac()) {
             payload.hac_selection = radio('hac_selection');
             payload.enp4s0_ip = $('enp4s0_ip').value.trim();
+        }
+        if (needsNetwork()) {
             const gw = $('enp4s0_gateway').value.trim();
             if (gw) payload.enp4s0_gateway = gw;
         }

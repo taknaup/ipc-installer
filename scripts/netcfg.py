@@ -104,6 +104,22 @@ def choose_default_route(port_ips, entered):
     return 'enp4s0', gateway, True
 
 
+def choose_sap_route(ip, entered):
+    """SAP has one port. No gateway entered: no default route. Otherwise the default route goes on eno1; a
+    gateway outside the port's /24 is marked on-link so the system accepts it. Returns (gateway|None, on_link)."""
+    if not entered:
+        return None, False
+    gateway = parse_ip(entered, 'Gateway')
+    if gateway == ip:
+        raise NetcfgError(f"The gateway {gateway} is the same as this iPC's own address on eno1.")
+    net = ipaddress.ip_network(f'{ip}/24', strict=False)
+    if gateway in net:
+        if gateway in (net.network_address, net.broadcast_address):
+            raise NetcfgError(f'The gateway {gateway} is a network or broadcast address.')
+        return gateway, False
+    return gateway, True
+
+
 def route_block(gateway, on_link):
     """A netplan 'routes:' block, written after the 6-space indent of its placeholder line in the template."""
     lines = ['routes:', '        - to: default', f'          via: {gateway}']
@@ -121,6 +137,15 @@ def describe_route(port, gateway, on_link):
 def resolve_values(cfg, args):
     try:
         values = {'eno1_ip': node_entry(cfg['eno1'][args.system], args.node, f'eno1/{args.system}')}
+        if args.system == 'SAP':
+            gateway, on_link = choose_sap_route(parse_ip(values['eno1_ip'], 'eno1 address'), args.facility_gateway)
+            values['eno1_routes'] = route_block(gateway, on_link) if gateway else ''
+            if not gateway:
+                values['_route'] = 'No default gateway (no default route set)'
+            elif on_link:
+                values['_route'] = f"Default gateway {gateway} (not on the SAP network, so it is set on-link on eno1)"
+            else:
+                values['_route'] = f'Default gateway {gateway} on the SAP network (eno1)'
         if args.system == 'HAC':
             if not args.hac or not args.facility_ip:
                 raise NetcfgError('A HAC selection and facility network address are required.')

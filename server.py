@@ -90,7 +90,8 @@ def validate_payload(payload):
         return None, 'Node designation must be Primary or Backup.'
     if not isinstance(location, str) or not LOCATION_RE.match(location):
         return None, 'Location may only contain letters, numbers, dot, dash and underscore.'
-    # HAC number and facility address only matter when the network is being configured.
+    # HAC number and facility address only matter when the network is being configured; a gateway is optional
+    # for HAC (blank = facility .1) and for SAP (blank = no default route).
     needs_network = work_mode in ('network', 'full')
     if needs_network and system_type == 'HAC':
         if re.match(r'^HAC\d+$', hac):
@@ -101,16 +102,18 @@ def validate_payload(payload):
             ipaddress.IPv4Address(enp4s0_ip)
         except ValueError:
             return None, 'Facility network address is not a valid IPv4 address.'
-        if enp4s0_gateway:
-            # Any valid address: netcfg.py puts the default route on the port whose network the gateway is on.
-            try:
-                gateway = ipaddress.IPv4Address(enp4s0_gateway)
-            except ValueError:
-                return None, 'Gateway is not a valid IPv4 address.'
-            if gateway.is_loopback or gateway.is_multicast or gateway.is_unspecified or gateway.is_link_local:
-                return None, 'Gateway cannot be used as a host address.'
     else:
-        hac, enp4s0_ip, enp4s0_gateway = '', '', ''
+        hac, enp4s0_ip = '', ''
+    if needs_network and enp4s0_gateway:
+        # Any valid address: netcfg.py puts the default route on the port the gateway belongs to.
+        try:
+            gateway = ipaddress.IPv4Address(enp4s0_gateway)
+        except ValueError:
+            return None, 'Gateway is not a valid IPv4 address.'
+        if gateway.is_loopback or gateway.is_multicast or gateway.is_unspecified or gateway.is_link_local:
+            return None, 'Gateway cannot be used as a host address.'
+    else:
+        enp4s0_gateway = ''
 
     return {
         'work_mode': work_mode,
@@ -200,7 +203,7 @@ class InstallerHandler(http.server.SimpleHTTPRequestHandler):
         """Where the default route will go, for the confirm screen (same logic the installer uses)."""
         q = {k: (v[0] if v else '') for k, v in query.items()}
         values, error = validate_payload({
-            'work_mode': 'network', 'system_type': 'HAC', 'node_type': q.get('node', 'Primary'),
+            'work_mode': 'network', 'system_type': q.get('system', 'HAC'), 'node_type': q.get('node', 'Primary'),
             'hac_selection': q.get('hac', ''), 'enp4s0_ip': q.get('ip', ''), 'enp4s0_gateway': q.get('gw', '')})
         if error:
             self._json(200, {'ok': False, 'text': error})
@@ -211,7 +214,7 @@ class InstallerHandler(http.server.SimpleHTTPRequestHandler):
             with open(os.path.join(BASE_DIR, 'network', 'config.json')) as f:
                 cfg = json.load(f)
             self._json(200, netcfg.preview_default_route(
-                cfg, 'HAC', values['node_type'], values['hac'], values['enp4s0_ip'], values['enp4s0_gateway']))
+                cfg, values['system_type'], values['node_type'], values['hac'], values['enp4s0_ip'], values['enp4s0_gateway']))
         except Exception as e:  # missing python3-yaml, unreadable config...
             self._json(200, {'ok': False, 'text': f'Could not work out the route: {e}'})
 
