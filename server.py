@@ -102,12 +102,13 @@ def validate_payload(payload):
         except ValueError:
             return None, 'Facility network address is not a valid IPv4 address.'
         if enp4s0_gateway:
+            # Any valid address: netcfg.py puts the default route on the port whose network the gateway is on.
             try:
                 gateway = ipaddress.IPv4Address(enp4s0_gateway)
             except ValueError:
-                return None, 'Facility gateway is not a valid IPv4 address.'
-            if gateway not in ipaddress.ip_network(f'{enp4s0_ip}/24', strict=False):
-                return None, 'Facility gateway must be on the same /24 network as the facility address.'
+                return None, 'Gateway is not a valid IPv4 address.'
+            if gateway.is_loopback or gateway.is_multicast or gateway.is_unspecified or gateway.is_link_local:
+                return None, 'Gateway cannot be used as a host address.'
     else:
         hac, enp4s0_ip, enp4s0_gateway = '', '', ''
 
@@ -190,8 +191,29 @@ class InstallerHandler(http.server.SimpleHTTPRequestHandler):
             })
         elif parsed.path == '/api/events':
             self._events(parse_qs(parsed.query))
+        elif parsed.path == '/api/route-preview':
+            self._route_preview(parse_qs(parsed.query))
         else:
             super().do_GET()
+
+    def _route_preview(self, query):
+        """Where the default route will go, for the confirm screen (same logic the installer uses)."""
+        q = {k: (v[0] if v else '') for k, v in query.items()}
+        values, error = validate_payload({
+            'work_mode': 'network', 'system_type': 'HAC', 'node_type': q.get('node', 'Primary'),
+            'hac_selection': q.get('hac', ''), 'enp4s0_ip': q.get('ip', ''), 'enp4s0_gateway': q.get('gw', '')})
+        if error:
+            self._json(200, {'ok': False, 'text': error})
+            return
+        try:
+            sys.path.insert(0, os.path.join(BASE_DIR, 'scripts'))
+            import netcfg
+            with open(os.path.join(BASE_DIR, 'network', 'config.json')) as f:
+                cfg = json.load(f)
+            self._json(200, netcfg.preview_default_route(
+                cfg, 'HAC', values['node_type'], values['hac'], values['enp4s0_ip'], values['enp4s0_gateway']))
+        except Exception as e:  # missing python3-yaml, unreadable config...
+            self._json(200, {'ok': False, 'text': f'Could not work out the route: {e}'})
 
     def _events(self, query):
         run_id = (query.get('run') or [''])[0]

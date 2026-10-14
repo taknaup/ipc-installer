@@ -34,6 +34,8 @@
     };
 
     const needsNetwork = () => radio('work_mode') !== 'install';
+    // An Ignition-only SAP install applies nothing that depends on the node, so the screen does not ask.
+    const asksNode = () => !(radio('work_mode') === 'install' && radio('system_type') === 'SAP');
     const askHac = () => needsNetwork() && radio('system_type') === 'HAC';
 
     function screenOrder() {
@@ -114,24 +116,43 @@
             const ip = $('enp4s0_ip').value.trim();
             const gw = $('enp4s0_gateway').value.trim();
             if (!isValidIPv4(ip)) { $('enp4s0_ip').classList.add('invalid'); return 'Enter the facility network address, for example 192.168.10.10.'; }
-            if (gw && (!isValidIPv4(gw) || subnetOf(gw) !== subnetOf(ip))) {
+            if (gw && !isValidIPv4(gw)) {
                 $('enp4s0_gateway').classList.add('invalid');
-                return 'The gateway must be on the same network as the facility address.';
+                return 'Enter the gateway as four numbers, for example 192.168.100.1, or leave it blank.';
             }
         }
         return '';
     }
 
+    // Asks the installer's own logic which port the default route will be set on.
+    async function showRoutePreview(el) {
+        const q = new URLSearchParams({
+            hac: radio('hac_selection'), node: asksNode() ? radio('node_type') : 'Primary',
+            ip: $('enp4s0_ip').value.trim(), gw: $('enp4s0_gateway').value.trim()
+        });
+        try {
+            const res = await fetch(`/api/route-preview?${q}`, { cache: 'no-store' });
+            const data = await res.json();
+            el.textContent = data.text.replace(/^Default gateway /, '');
+            // A gateway the installer would reject: show why and keep Start disabled until it is fixed.
+            el.style.color = data.ok ? '' : '#fca5a5';
+            $('btn-install').disabled = !data.ok;
+        } catch (err) {
+            el.textContent = $('enp4s0_gateway').value.trim() || `${defaultGateway($('enp4s0_ip').value.trim())} (facility default)`;
+        }
+    }
+
     function buildSummary() {
         const mode = radio('work_mode') || 'install';
-        const rows = [['Task', MODES[mode].label], ['System type', radio('system_type')], ['Node', radio('node_type')]];
+        const rows = [['Task', MODES[mode].label], ['System type', radio('system_type')]];
+        if (asksNode()) rows.push(['Node', radio('node_type')]);
         if (askHac()) {
             const ip = $('enp4s0_ip').value.trim();
-            rows.push(['HAC', radio('hac_selection')], ['Facility address', ip],
-                ['Gateway', $('enp4s0_gateway').value.trim() || `${defaultGateway(ip)} (default)`]);
+            rows.push(['HAC', radio('hac_selection')], ['Facility address', ip], ['Default gateway', 'Working it out...']);
         }
         const list = $('summary-list');
         list.innerHTML = '';
+        let routeEl = null;
         rows.forEach(([k, v]) => {
             const li = document.createElement('li');
             const span = document.createElement('span');
@@ -140,7 +161,10 @@
             strong.textContent = v;
             li.append(span, strong);
             list.appendChild(li);
+            if (k === 'Default gateway') routeEl = strong;
         });
+        $('btn-install').disabled = false;
+        if (routeEl) showRoutePreview(routeEl);
         const note = $('summary-note');
         note.innerHTML = '';
         [...MODES[mode].notes, 'When you press Start, a window will ask for the administrator password.'].forEach(t => {
@@ -166,8 +190,10 @@
         show(order[order.indexOf(current) - 1]);
     });
 
+    function updateNodeVisibility() { setVisible('node-group', asksNode()); }
     document.querySelectorAll('input[name="work_mode"], input[name="system_type"]').forEach(r =>
-        r.addEventListener('change', renderStepper));
+        r.addEventListener('change', () => { renderStepper(); updateNodeVisibility(); }));
+    updateNodeVisibility();
 
     // ------------------------------------------------------------------ number pad
 
@@ -474,7 +500,7 @@
         $('install-title').textContent = 'Waiting for the administrator password...';
         const mode = radio('work_mode') || 'install';
         const system = radio('system_type') || 'HAC';
-        const payload = { work_mode: mode, system_type: system, node_type: radio('node_type') || 'Primary', retry: !!retry };
+        const payload = { work_mode: mode, system_type: system, node_type: (asksNode() ? radio('node_type') : '') || 'Primary', retry: !!retry };
         if (askHac()) {
             payload.hac_selection = radio('hac_selection');
             payload.enp4s0_ip = $('enp4s0_ip').value.trim();

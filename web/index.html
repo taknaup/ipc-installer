@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>iPC Setup</title>
-    <link rel="stylesheet" href="style.css?v=20261006_6">
+    <link rel="stylesheet" href="style.css?v=20261014_2">
 </head>
 <body>
     <div class="background-anim"></div>
@@ -71,7 +71,7 @@
                         </label>
                     </div>
                 </div>
-                <div class="group">
+                <div class="group" id="node-group">
                     <div class="group-label">Node</div>
                     <div class="cards cols-2">
                         <label class="card">
@@ -114,8 +114,9 @@
                         <input class="field" type="text" id="enp4s0_ip" readonly inputmode="none" autocomplete="off" placeholder="Tap to enter, e.g. 192.168.10.10">
                     </div>
                     <div class="group">
-                        <label class="group-label" for="enp4s0_gateway">Gateway <span class="muted">(optional)</span></label>
-                        <input class="field" type="text" id="enp4s0_gateway" readonly inputmode="none" autocomplete="off" placeholder="Tap to enter (default: ends in .1)">
+                        <label class="group-label" for="enp4s0_gateway">Default gateway <span class="muted">(optional)</span></label>
+                        <input class="field" type="text" id="enp4s0_gateway" readonly inputmode="none" autocomplete="off" placeholder="Tap to enter (blank: facility .1)">
+                        <p class="muted hint" id="gateway-hint">Leave blank to use the facility network's .1 address. A gateway is set on the port it belongs to (controls, SAP or facility); any other address is used on the facility port.</p>
                     </div>
                 </div>
             </section>
@@ -236,6 +237,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=20261006_6"></script>
+    <script src="script.js?v=20261014_2"></script>
 </body>
 </html>

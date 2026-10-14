@@ -19,6 +19,9 @@ Everything is started through `bash` or `python3`, so `bash launch.sh` works eve
 Nothing needs to be installed on the iPC first: only Python 3 and the tools that ship with Ubuntu Desktop
 are used (no curl or wget).
 
+## Revision history
+See `REVISION_HISTORY.md` for what changed and when. Add an entry with every change.
+
 ## Settings
 `config/installer.conf` holds the standard admin account, the service user, and the Workstation project
 URL. Network addresses are in `network/config.json`.

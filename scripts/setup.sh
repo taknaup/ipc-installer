@@ -558,12 +558,15 @@ step_start_gateway() {
 }
 
 step_restore_backup() {
-    local backup
+    local backup gw_name
     media_path backup
     backup="$MEDIA_FILE"
     ensure_gateway
-    log_msg "[Restore] Loading Gateway backup from: $backup"
-    run "$INSTALL_DIR/gwcmd.sh" --restore "$backup" --name "${SYSTEM_TYPE}_${NODE_TYPE}" -y ||
+    # An Ignition-only SAP install has no node (the screen does not ask), so the gateway is just "SAP".
+    gw_name="${SYSTEM_TYPE}_${NODE_TYPE}"
+    if [ "$SYSTEM_TYPE" = "SAP" ] && [ "$WORK_MODE" = "install" ]; then gw_name="SAP"; fi
+    log_msg "[Restore] Loading Gateway backup from: $backup (gateway name: $gw_name)"
+    run "$INSTALL_DIR/gwcmd.sh" --restore "$backup" --name "$gw_name" -y ||
         fail "Restoring the gateway backup failed." "See the log for details, then press Retry."
     log_msg "[Restore] Backup restored, waiting for the gateway to restart..."
     wait_for_gateway_restart

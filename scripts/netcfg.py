@@ -71,6 +71,53 @@ def node_entry(table, node, where):
     raise NetcfgError(f'config.json has no {node} address for {where}.', 'Check network/config.json.')
 
 
+PORT_LABELS = {'eno1': 'controls network', 'enp2s0': 'SAP network', 'enp4s0': 'facility network'}
+
+
+def choose_default_route(port_ips, entered):
+    """Decides where the default route goes (HAC).
+
+    - No gateway entered: the facility network's .1 address, on enp4s0.
+    - A gateway on one of the iPC's /24 networks: on the port that network is on.
+    - A gateway that is on none of them: still on enp4s0, marked on-link so the system accepts it.
+    Returns (port, gateway, on_link).
+    """
+    facility = port_ips['enp4s0']
+    if not entered:
+        gateway = ipaddress.IPv4Address('.'.join(str(facility).split('.')[:3] + ['1']))
+        if gateway == facility:
+            raise NetcfgError(
+                f'The facility address {facility} is the same as its default gateway {gateway}.',
+                'Enter the gateway address explicitly.')
+        return 'enp4s0', gateway, False
+
+    gateway = parse_ip(entered, 'Gateway')
+    for port, ip in port_ips.items():
+        if gateway == ip:
+            raise NetcfgError(f'The gateway {gateway} is the same as this iPC\'s own address on {port}.')
+    for port in ('eno1', 'enp2s0', 'enp4s0'):
+        net = ipaddress.ip_network(f'{port_ips[port]}/24', strict=False)
+        if gateway in net:
+            if gateway in (net.network_address, net.broadcast_address):
+                raise NetcfgError(f'The gateway {gateway} is a network or broadcast address.')
+            return port, gateway, False
+    return 'enp4s0', gateway, True
+
+
+def route_block(gateway, on_link):
+    """A netplan 'routes:' block, written after the 6-space indent of its placeholder line in the template."""
+    lines = ['routes:', '        - to: default', f'          via: {gateway}']
+    if on_link:
+        lines.append('          on-link: true')
+    return '\n'.join(lines)
+
+
+def describe_route(port, gateway, on_link):
+    if on_link:
+        return f'Default gateway {gateway} (not on any of this iPC\'s networks, so it is used on the facility port {port})'
+    return f'Default gateway {gateway} on the {PORT_LABELS[port]} ({port})'
+
+
 def resolve_values(cfg, args):
     try:
         values = {'eno1_ip': node_entry(cfg['eno1'][args.system], args.node, f'eno1/{args.system}')}
@@ -80,27 +127,36 @@ def resolve_values(cfg, args):
             values['enp2s0_ip'] = node_entry(cfg['enp2s0'][args.hac], args.node, f'enp2s0/{args.hac}')
             facility = parse_ip(args.facility_ip, 'Facility network address')
             values['enp4s0_ip'] = str(facility)
-            if args.facility_gateway:
-                gateway = parse_ip(args.facility_gateway, 'Facility gateway')
-            else:
-                o = str(facility).split('.')
-                gateway = ipaddress.IPv4Address('.'.join(o[:3] + ['1']))
             net = ipaddress.ip_network(f'{facility}/24', strict=False)
             if facility in (net.network_address, net.broadcast_address):
                 raise NetcfgError(f'Facility address {facility} is a network or broadcast address.')
-            if gateway not in net:
-                raise NetcfgError(f'Facility gateway {gateway} is not on the same /24 network as {facility}.')
-            if gateway == facility:
-                raise NetcfgError(
-                    f'The facility address {facility} is the same as its default gateway {gateway}.',
-                    'Enter the gateway address explicitly.')
-            values['enp4s0_gateway'] = str(gateway)
+            port_ips = {p: parse_ip(values[f'{p}_ip'], f'{p} address') for p in ('eno1', 'enp2s0', 'enp4s0')}
+            port, gateway, on_link = choose_default_route(port_ips, args.facility_gateway)
+            for p in port_ips:
+                values[f'{p}_routes'] = ''
+            values[f'{port}_routes'] = route_block(gateway, on_link)
+            values['_route'] = describe_route(port, gateway, on_link)
     except KeyError as e:
         raise NetcfgError(f'config.json has no entry for {e}.', 'Check network/config.json.')
     for key in ('eno1_ip', 'enp2s0_ip'):
         if key in values:
             parse_ip(values[key], f'config.json address {key}')
     return values
+
+
+def preview_default_route(cfg, system, node, hac, facility_ip, gateway):
+    """For the confirm screen: where will the default route go? Returns a dict, never raises."""
+    try:
+        args = types_namespace(system=system, node=node, hac=hac, facility_ip=facility_ip, facility_gateway=gateway)
+        values = resolve_values(cfg, args)
+        return {'ok': True, 'text': values.get('_route', '')}
+    except NetcfgError as e:
+        return {'ok': False, 'text': str(e)}
+
+
+def types_namespace(**kw):
+    import types
+    return types.SimpleNamespace(**kw)
 
 
 def render(template_path, values):
@@ -112,7 +168,8 @@ def render(template_path, values):
             raise NetcfgError(f'Template {os.path.basename(template_path)} needs "{m.group(1)}" which was not provided.')
         return values[m.group(1)]
 
-    return re.sub(r'\{\{(\w+)\}\}', sub, text)
+    text = re.sub(r'\{\{(\w+)\}\}', sub, text)
+    return re.sub(r'(?m)^[ \t]+\n', '', text)   # lines left blank by empty placeholders
 
 
 def parse_rendered(text):
@@ -403,7 +460,8 @@ def main():
     ap.add_argument('--node', required=True, choices=['Primary', 'Backup'])
     ap.add_argument('--hac', default='')
     ap.add_argument('--facility-ip', default='')
-    ap.add_argument('--facility-gateway', default='')
+    ap.add_argument('--facility-gateway', default='',
+                    help='default gateway; blank = .1 of the facility network on enp4s0')
     ap.add_argument('--config', default=os.path.join(BASE_DIR, 'network', 'config.json'))
     ap.add_argument('--template-dir', default=os.path.join(BASE_DIR, 'network'))
     ap.add_argument('--backup-dir', default='/var/backups/ignition-installer/network')
@@ -436,6 +494,9 @@ def main():
         roles = {'eno1': 'SAP network' if args.system == 'SAP' else 'Controls network',
                  'enp2s0': 'SAP network', 'enp4s0': 'Facility network'}
         result['summary'] = [f'{roles.get(i, i)} ({i}): {c["addresses"][0]}' for i, c in ethernets.items()]
+        if values.get('_route'):
+            result['summary'].append(values['_route'])
+            log(f'[Network] {values["_route"]}')
         result['verified'] = not args.skip_verify
         result['ok'] = True
     except NetcfgError as e:

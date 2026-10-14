@@ -326,3 +326,5 @@ body {
 }
 .summary-list li { padding: clamp(5px, 1.5vh, 12px) 0; font-size: clamp(0.95rem, 2.5vh, 1.1rem); }
 .note-box { font-size: clamp(0.85rem, 2.2vh, 1rem); }
+
+.hint { font-size: 0.85rem; line-height: 1.35; margin-top: 8px; }

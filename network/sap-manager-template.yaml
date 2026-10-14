@@ -13,13 +13,6 @@ network:
         passthrough:
           ipv6.method: "disabled"          # IPv6 fully off on this port
           ipv4.ignore-auto-dns: "true"     # DNS "Automatic" switched off
-          ipv4.never-default: "true"       # "Use this connection only for resources on its network"
+          #ipv4.never-default: "true"       # "Use this connection only for resources on its network"
       addresses:
         - {{eno1_ip}}/24
-      routes:
-        - to: 192.168.100.0/24    # on-link: devices on this subnet are reached directly, not via the gateway
-          scope: link
-          metric: 100
-        - to: default
-          via: 192.168.100.1
-          metric: 100
